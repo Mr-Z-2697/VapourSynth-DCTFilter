@@ -45,6 +45,7 @@ struct DCTFilterData {
     int peak;
     int nx;
     int ny;
+    int cs;
     std::vector<float> qps;
     std::vector<float> factors;
     fftwf_plan dct, idct;
@@ -62,6 +63,9 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
         d->buffer_lock.unlock_shared();
     }
 
+    if (d->cs)
+        d->cs = 1 << (sizeof(T)*8-1);
+
     for (int plane = 0; plane < d->vi->format->numPlanes; plane++) {
         if (d->process[plane]) {
             const int width = vsapi->getFrameWidth(src, plane);
@@ -77,7 +81,16 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
                         float * VS_RESTRICT output = buffer + d->nx * yy;
 
                         for (int xx = 0; xx < d->nx; xx++)
-                            output[xx] = input[xx];
+                        {
+                            if (plane && d->cs && std::is_integral<T>::value)
+                            {
+                                output[xx] = static_cast<float>input[xx] - d->cs;
+                            }
+                            else
+                            {
+                                output[xx] = input[xx];
+                            }
+                        }
                     }
 
                     fftwf_execute_r2r(d->dct, buffer, buffer);
@@ -97,7 +110,16 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
 
                         for (int xx = 0; xx < d->nx; xx++) {
                             if (std::is_integral<T>::value)
-                                output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f), 0), d->peak);
+                            {
+                                if (plane && d->cs)
+                                {
+                                    output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f + d->cs), 0), d->peak);
+                                }
+                                else
+                                {
+                                    output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f), 0), d->peak);
+                                }
+                            }
                             else
                                 output[xx] = input[xx];
                         }
@@ -189,12 +211,13 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         if (err != 0) ny = 0;
         if (nx < 0 || ny < 0)
             throw std::string{ "nx and ny must be > 0" };
-        if (nx == 0)
-            nx = ny ? ny : 8;
-        if (ny == 0)
-            ny = nx;
+        if (nx == 0) nx = ny ? ny : 8;
+        if (ny == 0) ny = nx;
         d->nx = nx;
         d->ny = ny;
+
+        d->cs = vsapi->propGetInt(in, "cs", 0, &err);
+        if (err != 0) d->cs = 0;
 
         padWidth = (d->vi->width % nx) ? nx - d->vi->width % (nx) : 0;
         padHeight = (d->vi->height % ny) ? ny - d->vi->height % (ny) : 0;
@@ -357,6 +380,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
                  "planes:int[]:opt;"
                  "n:int:opt;"
                  "ny:int:opt;"
+                 "cs:int:opt;"
                  "qps:float[]:opt;",
                  dctfilterCreate, nullptr, plugin);
 }
