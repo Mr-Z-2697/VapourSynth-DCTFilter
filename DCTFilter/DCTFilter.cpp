@@ -70,7 +70,6 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
             const T * srcp = reinterpret_cast<const T *>(vsapi->getReadPtr(src, plane));
             T * VS_RESTRICT dstp = reinterpret_cast<T *>(vsapi->getWritePtr(dst, plane));
 
-            // const int n = d->n;
             for (int y = 0; y < height; y += d->ny) {
                 for (int x = 0; x < width; x += d->nx) {
                     for (int yy = 0; yy < d->ny; yy++) {
@@ -184,7 +183,7 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
 
     try {
         int err;
-        int nx = vsapi->propGetInt(in, "nx", 0, &err);
+        int nx = vsapi->propGetInt(in, "n", 0, &err);
         if (err != 0) nx = 0;
         int ny = vsapi->propGetInt(in, "ny", 0, &err);
         if (err != 0) ny = 0;
@@ -356,7 +355,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
                  "clip:clip;"
                  "factors:float[];"
                  "planes:int[]:opt;"
-                 "nx:int:opt;"
+                 "n:int:opt;"
                  "ny:int:opt;"
                  "qps:float[]:opt;",
                  dctfilterCreate, nullptr, plugin);
