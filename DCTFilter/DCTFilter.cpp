@@ -184,13 +184,13 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
     try {
         int err;
         int n = vsapi->propGetInt(in, "n", 0, &err);
-        if (err != 0) n = 8;
-        if (n < 0 || (n & (n - 1)) != 0)
-            throw std::string{ "n must be power of two and > 1" };
+        if (err != 0 || n == 0) n = 8;
+        if (n < 0)
+            throw std::string{ "n must be > 0" };
         d->n = n;
 
-        padWidth = (d->vi->width & (2*n-1)) ? 2*n - d->vi->width % (2*n) : 0;
-        padHeight = (d->vi->height & (2*n-1)) ? 2*n - d->vi->height % (2*n) : 0;
+        padWidth = (d->vi->width % n) ? n - d->vi->width % n : 0;
+        padHeight = (d->vi->height % n) ? n - d->vi->height % n : 0;
 
         if (!isConstantFormat(d->vi) || (d->vi->format->sampleType == stInteger && d->vi->format->bitsPerSample > 16) ||
             (d->vi->format->sampleType == stFloat && d->vi->format->bitsPerSample != 32))
