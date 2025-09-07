@@ -43,7 +43,8 @@ struct DCTFilterData {
     const VSVideoInfo * vi;
     bool process[3];
     int peak;
-    int n;
+    int nx;
+    int ny;
     std::vector<float> qps;
     std::vector<float> factors;
     fftwf_plan dct, idct;
@@ -69,20 +70,20 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
             const T * srcp = reinterpret_cast<const T *>(vsapi->getReadPtr(src, plane));
             T * VS_RESTRICT dstp = reinterpret_cast<T *>(vsapi->getWritePtr(dst, plane));
 
-            const int n = d->n;
-            for (int y = 0; y < height; y += n) {
-                for (int x = 0; x < width; x += n) {
-                    for (int yy = 0; yy < n; yy++) {
+            // const int n = d->n;
+            for (int y = 0; y < height; y += d->ny) {
+                for (int x = 0; x < width; x += d->nx) {
+                    for (int yy = 0; yy < d->ny; yy++) {
                         const T * input = srcp + stride * yy + x;
-                        float * VS_RESTRICT output = buffer + n * yy;
+                        float * VS_RESTRICT output = buffer + d->nx * yy;
 
-                        for (int xx = 0; xx < n; xx++)
+                        for (int xx = 0; xx < d->nx; xx++)
                             output[xx] = input[xx];
                     }
 
                     fftwf_execute_r2r(d->dct, buffer, buffer);
 
-                    for (int i = 0; i < n * n; i++) {
+                    for (int i = 0; i < d->nx * d->ny; i++) {
                         buffer[i] *= d->factors[i];
                         if (d->qps[i] > 0.0f) {
                             buffer[i] -= fmodf(buffer[i], d->qps[i]);
@@ -91,11 +92,11 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
 
                     fftwf_execute_r2r(d->idct, buffer, buffer);
 
-                    for (int yy = 0; yy < n; yy++) {
-                        const float * input = buffer + n * yy;
+                    for (int yy = 0; yy < d->ny; yy++) {
+                        const float * input = buffer + d->nx * yy;
                         T * VS_RESTRICT output = dstp + stride * yy + x;
 
-                        for (int xx = 0; xx < n; xx++) {
+                        for (int xx = 0; xx < d->nx; xx++) {
                             if (std::is_integral<T>::value)
                                 output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f), 0), d->peak);
                             else
@@ -104,8 +105,8 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
                     }
                 }
 
-                srcp += stride * n;
-                dstp += stride * n;
+                srcp += stride * d->ny;
+                dstp += stride * d->ny;
             }
         }
     }
@@ -126,7 +127,7 @@ static const VSFrameRef *VS_CC dctfilterGetFrame(int n, int activationReason, vo
             auto threadId = std::this_thread::get_id();
 
             if (!d->buffer.count(threadId)) {
-                float * buffer = fftwf_alloc_real(d->n * d->n);
+                float * buffer = fftwf_alloc_real(d->nx * d->ny);
                 if (!buffer)
                     throw std::string{ "malloc failure (buffer)" };
 
@@ -183,14 +184,21 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
 
     try {
         int err;
-        int n = vsapi->propGetInt(in, "n", 0, &err);
-        if (err != 0 || n == 0) n = 8;
-        if (n < 0)
-            throw std::string{ "n must be > 0" };
-        d->n = n;
+        int nx = vsapi->propGetInt(in, "nx", 0, &err);
+        if (err != 0) nx = 0;
+        int ny = vsapi->propGetInt(in, "ny", 0, &err);
+        if (err != 0) ny = 0;
+        if (nx < 0 || ny < 0)
+            throw std::string{ "nx and ny must be > 0" };
+        if (nx == 0)
+            nx = ny ? ny : 8;
+        if (ny == 0)
+            ny = nx;
+        d->nx = nx;
+        d->ny = ny;
 
-        padWidth = (d->vi->width % n) ? n - d->vi->width % n : 0;
-        padHeight = (d->vi->height % n) ? n - d->vi->height % n : 0;
+        padWidth = (d->vi->width % nx) ? nx - d->vi->width % (nx) : 0;
+        padHeight = (d->vi->height % ny) ? ny - d->vi->height % (ny) : 0;
 
         if (!isConstantFormat(d->vi) || (d->vi->format->sampleType == stInteger && d->vi->format->bitsPerSample > 16) ||
             (d->vi->format->sampleType == stFloat && d->vi->format->bitsPerSample != 32))
@@ -216,7 +224,7 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         }
 
         const int nfactors = vsapi->propNumElements(in, "factors");
-        if (nfactors != d->n && nfactors != d->n * d->n)
+        if (nfactors != std::max(d->nx, d->ny) && nfactors != d->nx * d->ny)
             throw std::string{ "the number of factors must be equal to either n or n*n" };
 
         for (int i = 0; i < nfactors; i++) {
@@ -255,54 +263,54 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
             vsapi->freeMap(ret);
         }
 
-        d->factors.resize(d->n * d->n);
-        const auto norm = 1.f / (d->n * d->n * 4);
-        if (nfactors != d->n) {
+        d->factors.resize(d->nx * d->ny);
+        const auto norm = 1.f / (d->nx * d->ny * 4);
+        if (nfactors != std::max(d->nx, d->ny)) {
             for (int i = 0; i < nfactors; i++)
                 d->factors[i] = static_cast<float>(factors[i]) * norm;
         } else {
-            for (int y = 0; y < d->n; y++) {
-                for (int x = 0; x < d->n; x++)
-                    d->factors[d->n * y + x] = static_cast<float>(factors[y] * factors[x]) * norm;
+            for (int y = 0; y < d->ny; y++) {
+                for (int x = 0; x < d->nx; x++)
+                    d->factors[d->ny * y + x] = static_cast<float>(factors[y] * factors[x]) * norm;
             }
         }
 
-        d->qps.resize(d->n * d->n);
+        d->qps.resize(d->nx * d->ny);
         const int nqps = vsapi->propNumElements(in, "qps");
         if (nqps > 0) {
             const double * qps = vsapi->propGetFloatArray(in, "qps", nullptr);
-            if (nqps != d->n && nqps != d->n * d->n)
+            if (nqps != std::max(d->nx, d->ny) && nqps != d->nx * d->ny)
                 throw std::string{ "the number of qps must be equal to either n or n*n" };
 
-            if (nqps != d->n) {
+            if (nqps != std::max(d->nx, d->ny)) {
                 for (int i = 0; i < nqps; i++)
                     d->qps[i] = static_cast<float>(qps[i]);
             } else {
-                for (int y = 0; y < d->n; y++) {
-                    for (int x = 0; x < d->n; x++)
-                        d->qps[d->n * y + x] = static_cast<float>(qps[y] * qps[x]);
+                for (int y = 0; y < d->ny; y++) {
+                    for (int x = 0; x < d->nx; x++)
+                        d->qps[d->ny * y + x] = static_cast<float>(qps[y] * qps[x]);
                 }
             }
             if (d->vi->format->sampleType == stInteger) {
-                for (int i = 0; i < d->n * d->n; i++) {
+                for (int i = 0; i < d->nx * d->ny; i++) {
                     d->qps[i] *= (1 << d->vi->format->bitsPerSample) - 1;
                 }
             }
             d->qps[0] *= 2;
-            for (int i = 1; i < d->n; i++) {
+            for (int i = 1; i < std::max(d->nx, d->ny); i++) {
                 d->qps[i] *= std::sqrt(2.0f);
             }
-            for (int i = 1; i < d->n; i++) {
-                d->qps[d->n * i] *= std::sqrt(2.0f);
+            for (int i = 1; i < std::max(d->nx, d->ny); i++) {
+                d->qps[std::max(d->nx, d->ny) * i] *= std::sqrt(2.0f);
             }
         }
 
-        float * buffer = fftwf_alloc_real(d->n * d->n);
+        float * buffer = fftwf_alloc_real(d->nx * d->ny);
         if (!buffer)
             throw std::string{ "malloc failure (buffer)" };
 
-        d->dct = fftwf_plan_r2r_2d(d->n, d->n, buffer, buffer, FFTW_REDFT10, FFTW_REDFT10, FFTW_PATIENT);
-        d->idct = fftwf_plan_r2r_2d(d->n, d->n, buffer, buffer, FFTW_REDFT01, FFTW_REDFT01, FFTW_PATIENT);
+        d->dct = fftwf_plan_r2r_2d(d->ny, d->nx, buffer, buffer, FFTW_REDFT10, FFTW_REDFT10, FFTW_PATIENT);
+        d->idct = fftwf_plan_r2r_2d(d->ny, d->nx, buffer, buffer, FFTW_REDFT01, FFTW_REDFT01, FFTW_PATIENT);
 
         fftwf_free(buffer);
     } catch (const std::string & error) {
@@ -348,7 +356,8 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
                  "clip:clip;"
                  "factors:float[];"
                  "planes:int[]:opt;"
-                 "n:int:opt;"
+                 "nx:int:opt;"
+                 "ny:int:opt;"
                  "qps:float[]:opt;",
                  dctfilterCreate, nullptr, plugin);
 }
