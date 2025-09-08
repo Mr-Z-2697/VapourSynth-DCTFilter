@@ -293,7 +293,7 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         } else {
             for (int y = 0; y < d->ny; y++) {
                 for (int x = 0; x < d->nx; x++)
-                    d->factors[d->ny * y + x] = static_cast<float>(factors[y] * factors[x]) * norm;
+                    d->factors[d->nx * y + x] = static_cast<float>(factors[y] * factors[x]) * norm;
             }
         }
 
@@ -310,7 +310,7 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
             } else {
                 for (int y = 0; y < d->ny; y++) {
                     for (int x = 0; x < d->nx; x++)
-                        d->qps[d->ny * y + x] = static_cast<float>(qps[y] * qps[x]);
+                        d->qps[d->nx * y + x] = static_cast<float>(qps[y] * qps[x]);
                 }
             }
             if (d->vi->format->sampleType == stInteger) {
