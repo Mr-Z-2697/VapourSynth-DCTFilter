@@ -38,11 +38,6 @@
 
 #include <fftw3.h>
 
-#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
-#define dctf_x86 1
-#include <xmmintrin.h>
-#endif // defined(__i386__) || defined(__x86_64__)
-
 struct DCTFilterData {
     VSNodeRef * node;
     const VSVideoInfo * vi;
@@ -68,78 +63,10 @@ int dctf_max(int i1, int i2)
     return i1 > i2 ? i1 : i2;
 }
 
-#ifndef dctf_x86
-
-// copied from https://stackoverflow.com/questions/76974812/how-can-i-implement-a-fmod-function-with-decent-precision-without-casting-them-i/76982011#76982011
-float uint32_as_float (uint32_t a)
-{
-    float r;
-    memcpy (&r, &a, sizeof r);
-    return r;
-}
-
-uint32_t float_as_uint32 (float a)
-{
-    uint32_t r;
-    memcpy (&r, &a, sizeof r);
-    return r;
-}
-
-/* returns the floating-point remainder of a/b (rounded towards zero) */
-float dctf_fmodf (float a, float b)
-{
-    const float NAN_INDEFINITE = uint32_as_float (0xffc00000);
-    float r;
-    if (isnan (a) || isnan (b)) {
-        r = a + b;
-    } else if (isinf (a) || (b == 0.0f)) {
-        r = NAN_INDEFINITE;
-    } else {
-        float fa, fb, dividend, divisor;
-        int expo_a, expo_b;
-        fa = fabsf (a);
-        fb = fabsf (b);
-        if (fa >= fb) {
-            dividend = fa;
-            /* normalize divisor */
-            (void)frexpf (fa, &expo_a);
-            (void)frexpf (fb, &expo_b);
-            divisor = ldexpf (fb, expo_a - expo_b);
-            if (divisor <= 0.5f * dividend) {
-                divisor += divisor;
-            }
-            /* compute quotient one bit at a time */
-            while (divisor >= fb) {
-                if (dividend >= divisor) {
-                    dividend -= divisor;
-                }
-                divisor *= 0.5f;
-            }
-            /* dividend now represents remainder */
-            r = copysignf (dividend, a);
-        } else {
-            r = a;
-        }
-    }
-    return r;
-}
-
-#else
-
 float dctf_fmodf(float i, float d)
 {
-    __m128 ii = _mm_load_ss(&i), dd = _mm_load_ss(&d);
-    __m128 div = _mm_div_ss(ii, dd);
-    int trunc = _mm_cvtt_ss2si(div);
-    __m128 truncf = _mm_cvt_si2ss(div, trunc);
-    __m128 out = _mm_sub_ss(ii, _mm_mul_ss(dd, truncf));
-    float ret;
-    _mm_store_ss(&ret, out);
-    return ret;
-    
+    return i - truncf(i/d) * d;
 }
-
-#endif // ifndef dctf_x86
 
 template<typename T>
 static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d, const VSAPI * vsapi) noexcept {
