@@ -63,8 +63,10 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
         d->buffer_lock.unlock_shared();
     }
 
-    if (d->cs)
+    if (d->cs && std::is_integral<T>::value)
         d->cs = 1 << (sizeof(T)*8-1);
+    else
+        d->cs = 0;
 
     for (int plane = 0; plane < d->vi->format->numPlanes; plane++) {
         if (d->process[plane]) {
@@ -82,9 +84,9 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
 
                         for (int xx = 0; xx < d->nx; xx++)
                         {
-                            if (plane && d->cs && std::is_integral<T>::value)
+                            if (plane)
                             {
-                                output[xx] = static_cast<float>input[xx] - d->cs;
+                                output[xx] = static_cast<float>(input[xx]) - d->cs;
                             }
                             else
                             {
@@ -111,7 +113,7 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
                         for (int xx = 0; xx < d->nx; xx++) {
                             if (std::is_integral<T>::value)
                             {
-                                if (plane && d->cs)
+                                if (plane)
                                 {
                                     output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f + d->cs), 0), d->peak);
                                 }
