@@ -65,7 +65,8 @@ int dctf_max(int i1, int i2)
 
 float dctf_fmodf(float i, float d)
 {
-    return i - truncf(i/d) * d;
+    double ii = i, dd = d;
+    return ii - trunc(ii/dd) * dd;
 }
 
 template<typename T>
@@ -219,8 +220,9 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         d->cs = vsapi->propGetInt(in, "cs", 0, &err);
         if (err != 0) d->cs = 0;
 
-        padWidth = (d->vi->width % nx) ? nx - d->vi->width % nx : 0;
-        padHeight = (d->vi->height % ny) ? ny - d->vi->height % ny : 0;
+        int ssW = d->vi->format->subSamplingW, ssH = d->vi->format->subSamplingH;
+        padWidth = (d->vi->width % (nx << ssW)) ? (nx << ssW) - d->vi->width % (nx << ssW) : 0;
+        padHeight = (d->vi->height % (ny << ssH)) ? (ny << ssH) - d->vi->height % (ny << ssH) : 0;
 
         if (!isConstantFormat(d->vi) || (d->vi->format->sampleType == stInteger && d->vi->format->bitsPerSample > 16) ||
             (d->vi->format->sampleType == stFloat && d->vi->format->bitsPerSample != 32))
