@@ -38,7 +38,7 @@
 
 #include <fftw3.h>
 
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
 #define dctf_x86 1
 #include <xmmintrin.h>
 #endif // defined(__i386__) || defined(__x86_64__)
