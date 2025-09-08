@@ -132,7 +132,7 @@ float dctf_fmodf(float i, float d)
     __m128 div = _mm_div_ss(ii, dd);
     int trunc = _mm_cvtt_ss2si(div);
     __m128 truncf = _mm_cvt_si2ss(div, trunc);
-    __m128 out = _mm_sub_ss(ii, __mm_mul_ss(dd, truncf));
+    __m128 out = _mm_sub_ss(ii, _mm_mul_ss(dd, truncf));
     float ret;
     _mm_store_ss(&ret, out);
     return ret;
