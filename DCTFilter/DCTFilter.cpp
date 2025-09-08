@@ -219,8 +219,8 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         d->cs = vsapi->propGetInt(in, "cs", 0, &err);
         if (err != 0) d->cs = 0;
 
-        padWidth = (d->vi->width % nx) ? nx - d->vi->width % (nx) : 0;
-        padHeight = (d->vi->height % ny) ? ny - d->vi->height % (ny) : 0;
+        padWidth = (d->vi->width % nx) ? nx - d->vi->width % nx : 0;
+        padHeight = (d->vi->height % ny) ? ny - d->vi->height % ny : 0;
 
         if (!isConstantFormat(d->vi) || (d->vi->format->sampleType == stInteger && d->vi->format->bitsPerSample > 16) ||
             (d->vi->format->sampleType == stFloat && d->vi->format->bitsPerSample != 32))
@@ -319,11 +319,11 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
                 }
             }
             d->qps[0] *= 2;
-            for (int i = 1; i < std::max(d->nx, d->ny); i++) {
+            for (int i = 1; i < d->nx; i++) {
                 d->qps[i] *= std::sqrt(2.0f);
             }
-            for (int i = 1; i < std::max(d->nx, d->ny); i++) {
-                d->qps[std::max(d->nx, d->ny) * i] *= std::sqrt(2.0f);
+            for (int i = 1; i < d->ny; i++) {
+                d->qps[d->nx * i] *= std::sqrt(2.0f);
             }
         }
 
