@@ -75,6 +75,7 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
             const int stride = vsapi->getStride(src, plane) / sizeof(T);
             const T * srcp = reinterpret_cast<const T *>(vsapi->getReadPtr(src, plane));
             T * VS_RESTRICT dstp = reinterpret_cast<T *>(vsapi->getWritePtr(dst, plane));
+            const float cs = plane ? static_cast<float>(d->cs) : 0.0f;
 
             for (int y = 0; y < height; y += d->ny) {
                 for (int x = 0; x < width; x += d->nx) {
@@ -83,16 +84,7 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
                         float * VS_RESTRICT output = buffer + d->nx * yy;
 
                         for (int xx = 0; xx < d->nx; xx++)
-                        {
-                            if (plane)
-                            {
-                                output[xx] = static_cast<float>(input[xx]) - d->cs;
-                            }
-                            else
-                            {
-                                output[xx] = input[xx];
-                            }
-                        }
+                            output[xx] = static_cast<float>(input[xx]) - d->cs;
                     }
 
                     fftwf_execute_r2r(d->dct, buffer, buffer);
@@ -112,16 +104,7 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
 
                         for (int xx = 0; xx < d->nx; xx++) {
                             if (std::is_integral<T>::value)
-                            {
-                                if (plane)
-                                {
-                                    output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f + d->cs), 0), d->peak);
-                                }
-                                else
-                                {
-                                    output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f), 0), d->peak);
-                                }
-                            }
+                                output[xx] = std::min(std::max(static_cast<int>(input[xx] + 0.5f + d->cs), 0), d->peak);
                             else
                                 output[xx] = input[xx];
                         }
