@@ -379,8 +379,8 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
                  "factors:float[];"
                  "planes:int[]:opt;"
                  "n:int:opt;"
+                 "qps:float[]:opt;"
                  "ny:int:opt;"
-                 "cs:int:opt;"
-                 "qps:float[]:opt;",
+                 "cs:int:opt;",
                  dctfilterCreate, nullptr, plugin);
 }
