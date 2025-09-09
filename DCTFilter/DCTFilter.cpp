@@ -325,7 +325,7 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
                     d->qps[i] *= (1 << d->vi->format->bitsPerSample) - 1;
                 }
             }
-            if (nquant > 0) { // i don't understand why this was the case for original "qps"
+            if (nquant <= 0) { // i don't understand why this was the case for original "qps"
                 d->qps[0] *= 2;
                 for (int i = 1; i < d->nx; i++) {
                     d->qps[i] *= std::sqrt(2.0f);
