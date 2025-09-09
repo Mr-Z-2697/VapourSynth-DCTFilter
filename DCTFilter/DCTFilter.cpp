@@ -100,7 +100,7 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
                         float * VS_RESTRICT output = buffer + d->nx * yy;
 
                         for (int xx = 0; xx < d->nx; xx++)
-                            output[xx] = static_cast<float>(input[xx]) - d->cs;
+                            output[xx] = static_cast<float>(input[xx]) - cs;
                     }
 
                     fftwf_execute_r2r(d->dct, buffer, buffer);
@@ -120,7 +120,7 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
 
                         for (int xx = 0; xx < d->nx; xx++) {
                             if (std::is_integral<T>::value)
-                                output[xx] = dctf_min(dctf_max(static_cast<int>(input[xx] + 0.5f + d->cs), 0), d->peak);
+                                output[xx] = dctf_min(dctf_max(static_cast<int>(input[xx] + 0.5f + cs), 0), d->peak);
                             else
                                 output[xx] = input[xx];
                         }
