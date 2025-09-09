@@ -51,6 +51,7 @@ struct DCTFilterData {
     fftwf_plan dct, idct;
     std::unordered_map<std::thread::id, float *> buffer;
     std::shared_mutex buffer_lock;
+    float norm;
 };
 
 int dctf_min(int i1, int i2)
@@ -120,9 +121,9 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
 
                         for (int xx = 0; xx < d->nx; xx++) {
                             if (std::is_integral<T>::value)
-                                output[xx] = dctf_min(dctf_max(static_cast<int>(input[xx] + 0.5f + cs), 0), d->peak);
+                                output[xx] = dctf_min(dctf_max(static_cast<int>(input[xx] * d->norm + 0.5f + cs), 0), d->peak);
                             else
-                                output[xx] = input[xx];
+                                output[xx] = input[xx] * d->norm;
                         }
                     }
                 }
@@ -248,6 +249,7 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         }
 
         const int nfactors = vsapi->propNumElements(in, "factors");
+        int nquant = vsapi->propNumElements(in, "quant");
         if (nfactors != std::max(d->nx, d->ny) && nfactors != d->nx * d->ny)
             throw std::string{ "the number of factors must be equal to either n or n*n" };
 
@@ -288,7 +290,8 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         }
 
         d->factors.resize(d->nx * d->ny);
-        const auto norm = 1.f / (d->nx * d->ny * 4);
+        const auto norm = nquant > 0 ? 1.f : 1.f / (d->nx * d->ny * 4);
+        d->norm = nquant <= 0 ? 1.f : 1.f / (d->nx * d->ny * 4); // opposite condition
         if (nfactors != std::max(d->nx, d->ny)) {
             for (int i = 0; i < nfactors; i++)
                 d->factors[i] = static_cast<float>(factors[i]) * norm;
@@ -300,11 +303,13 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         }
 
         d->qps.resize(d->nx * d->ny);
-        const int nqps = vsapi->propNumElements(in, "qps");
+        int nqps = vsapi->propNumElements(in, "qps");
+        if (nquant > 0) nqps = nquant;
         if (nqps > 0) {
-            const double * qps = vsapi->propGetFloatArray(in, "qps", nullptr);
+            // "quant" is for > 1 value, which is easier to understand (maybe) and also makes more sense when calculated by multiplication from a single row.
+            const double * qps = nquant > 0 ? vsapi->propGetFloatArray(in, "quant", nullptr) : vsapi->propGetFloatArray(in, "qps", nullptr);
             if (nqps != std::max(d->nx, d->ny) && nqps != d->nx * d->ny)
-                throw std::string{ "the number of qps must be equal to either n or n*n" };
+                throw std::string{ "the number of qps/quant must be equal to either n or n*n" };
 
             if (nqps != std::max(d->nx, d->ny)) {
                 for (int i = 0; i < nqps; i++)
@@ -320,12 +325,14 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
                     d->qps[i] *= (1 << d->vi->format->bitsPerSample) - 1;
                 }
             }
-            d->qps[0] *= 2;
-            for (int i = 1; i < d->nx; i++) {
-                d->qps[i] *= std::sqrt(2.0f);
-            }
-            for (int i = 1; i < d->ny; i++) {
-                d->qps[d->nx * i] *= std::sqrt(2.0f);
+            if (nquant > 0) { // i don't understand why this was the case for original "qps"
+                d->qps[0] *= 2;
+                for (int i = 1; i < d->nx; i++) {
+                    d->qps[i] *= std::sqrt(2.0f);
+                }
+                for (int i = 1; i < d->ny; i++) {
+                    d->qps[d->nx * i] *= std::sqrt(2.0f);
+                }
             }
         }
 
@@ -383,6 +390,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
                  "n:int:opt;"
                  "qps:float[]:opt;"
                  "ny:int:opt;"
-                 "cs:int:opt;",
+                 "cs:int:opt;"
+                 "quant:float[]:opt;",
                  dctfilterCreate, nullptr, plugin);
 }
