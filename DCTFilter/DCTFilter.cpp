@@ -80,7 +80,7 @@ static void process(const VSFrameRef * src, VSFrameRef * dst, DCTFilterData * d,
     }
 
     if (d->cs && std::is_integral<T>::value)
-        d->cs = 1 << (sizeof(T)*8-1);
+        d->cs = 1 << (d->vi->format->bitsPerSample-1);
     else
         d->cs = 0;
 
