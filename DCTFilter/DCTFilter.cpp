@@ -253,11 +253,6 @@ static void VS_CC dctfilterCreate(const VSMap *in, VSMap *out, void *userData, V
         if (nfactors != std::max(d->nx, d->ny) && nfactors != d->nx * d->ny)
             throw std::string{ "the number of factors must be equal to either n or n*n" };
 
-        for (int i = 0; i < nfactors; i++) {
-            if (factors[i] < 0. || factors[i] > 1.)
-                throw std::string{ "factor must be between 0.0 and 1.0 (inclusive)" };
-        }
-
         VSCoreInfo coreinfo;
         vsapi->getCoreInfo2(core, &coreinfo);
         const unsigned numThreads = coreinfo.numThreads;
